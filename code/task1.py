@@ -31,10 +31,9 @@ class T1:
     @staticmethod
     def gen_signatures(uid_values, hash_params, num_buckets):
         p = 10 ** 9 + 7
-        sig = [None] * len(uid_values)
-        
+        sig = []
         for a, b in hash_params:
-            sig_row = [None] * len(hash_params)
+            sig_row = []
             for v in uid_values:
                 sig_row.append(((a * v + b) % p) % num_buckets)
             sig.append(min(sig_row))
@@ -56,11 +55,11 @@ class T1:
         num_buckets = len(cmp_map) - 1
         hash_params = T1.gen_hash_fns(num_hashes)
 
-        # (biz_id, [uid1, uid2, uid3, uid17, uid50, ...])
-        biz_sets = textRDD.map(lambda row: (row['business_id'], {cmp_map[row['user_id']]})).distinct(
-        ).reduceByKey(lambda x, y: x.update(y)).map(lambda row: (row[0], list(row[1])))
+        # (biz_id, {uid1, uid2, uid3, uid17, uid50, ...})
+        biz_sets = textRDD.map(lambda row: (row['business_id'], cmp_map[row['user_id']])).distinct(
+        ).groupByKey().map(lambda row: (row[0], set(row[1])))
         biz_sets.cache()
-        biz_map = biz_sets.mapValues(lambda uids: set(uids)).collectAsMap()
+        biz_map = biz_sets.collectAsMap()
 
         sig_m = biz_sets.mapValues(lambda uids_list: T1.gen_signatures(uids_list, hash_params, num_buckets)).collect()
         
