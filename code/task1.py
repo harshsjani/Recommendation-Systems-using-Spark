@@ -64,8 +64,8 @@ class T1:
         return ret
 
     def run(self):
-        num_bands = 50
-        num_hashes = 50
+        num_bands = 100
+        num_hashes = 100
         textRDD = self.sc.textFile(self.ipf).map(lambda row: json.loads(row))
         textRDD.cache()
 
@@ -76,7 +76,7 @@ class T1:
 
         # (biz_id, {uid1, uid2, uid3, uid17, uid50, ...})
         biz_sets = textRDD.map(lambda row: (row['business_id'], cmp_map[row['user_id']])).distinct(
-        ).groupByKey().map(lambda row: (row[0], list(sorted(set(row[1])))))
+        ).groupByKey().map(lambda row: (row[0], set(row[1])))
         biz_sets.cache()
         biz_map = biz_sets.collectAsMap()
 
@@ -92,7 +92,7 @@ class T1:
                     continue
                 for b1, b2 in combinations(sorted(v), 2):                    
                     candidate_pairs.add((b1, b2))
-            print("Processed band: {}".format(i))
+            # print("Processed band: {}".format(i))
         
 
         # for band_num in range(num_bands):
@@ -114,8 +114,8 @@ class T1:
         actual_similar_bizz = []
         print("Number of candidate pairs: {}".format(len(candidate_pairs)))
         for b1, b2 in candidate_pairs:
-            u1 = set(biz_map[b1])
-            u2 = set(biz_map[b2])
+            u1 = biz_map[b1]
+            u2 = biz_map[b2]
 
             sim = len(u1 & u2) / len(u1 | u2)
             if sim >= 0.05:
