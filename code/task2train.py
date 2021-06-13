@@ -17,12 +17,13 @@ class T2:
     @staticmethod
     def parse_review_list(row, stopwords):
         row = " ".join(row).lower()
-        row = re.sub(string.punctuation + "[0-9]", row)
+        row = "".join([x for x in row if x == " " or x.isalpha()])
         row = re.compile("\w+").sub(lambda x: "" if x.group(0) in stopwords else x.group(0), row)
-        ctr = Counter(row)
+        ctr = Counter(row.split())
         total_wc = sum(ctr.values())
         threshold = 10 ** -6
         row = re.compile("\w+").sub(lambda x: "" if ctr[x.group(0)]/total_wc < threshold else x.group(0), row)
+        return row
 
 
     def run(self):
@@ -36,6 +37,10 @@ class T2:
         textRDD.cache()
 
         biztextRDD = textRDD.map(lambda row: (row["business_id"], [row["text"]])).reduceByKey(lambda a, b: a + b).mapValues(lambda row: T2.parse_review_list(row, stopwords))
+        biztextRDD.cache()
+        biz_count = biztextRDD.count()
+        # idf_map = biztextRDD.flatMap(lambda row: )
+        print(biztextRDD.take(1))
 
 if __name__ == "__main__":
     t1 = T2()
