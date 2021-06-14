@@ -117,7 +117,7 @@ class T3t:
         candidate_pairs = T3t.gen_candidate_pairs(sig_temp, num_bands)
 
         ubRDD = textRDD.map(lambda row: (row["user_id"], [(row["business_id"], row["stars"])])).reduceByKey(lambda x, y: x + y).collect()
-        ubr = {row[0] : {x[1] : x[2] for x in row[1]} for row in ubRDD}
+        ubr = {row[0] : {x[0] : x[1] for x in row[1]} for row in ubRDD}
         actual_pairs = T3t.get_actual_pairs(candidate_pairs, ubr, biz_map)
         
         with open(self.outmodelfile, "w+") as f:
