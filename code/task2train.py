@@ -21,10 +21,7 @@ class T2:
         row = "".join([x for x in row if x == " " or x.isalpha()])
         row = re.compile("\w+").sub(lambda x: "" if x.group(0) in stopwords else x.group(0), row)
         ctr = Counter(row.split())
-        total_wc = sum(ctr.values())
         highest_wc = max(ctr.values())
-        threshold = 10 ** -6
-        row = re.compile("\w+").sub(lambda x: "" if ctr[x.group(0)]/total_wc < threshold else x.group(0), row)
         tf = defaultdict(int)
         for word, count in ctr.items():
             tf[word] = count / highest_wc
@@ -48,7 +45,7 @@ class T2:
         words = set()
         for biz in biz_list:
             words.update(set(biz_profile[biz]))
-        return words
+        return list(words)[:500]
 
     def run(self):
         sc = SparkContext.getOrCreate()
@@ -70,10 +67,17 @@ class T2:
         
         # { biz_id: word_list, ... }
         biz_profile = biztextRDD.mapValues(lambda x: T2.get_biz_profile(x, idf_map)).collectAsMap()
-        print("BIZPROFILE: {}".format(biz_profile.take(1)))
-
+        biztextRDD.unpersist()
+        del idf_map
         user_profile = textRDD.map(lambda row: (row["user_id"], [row["business_id"]])).reduceByKey(lambda x, y: x + y).mapValues(lambda value: T2.bizlist_to_wordvec(value, biz_profile)).collectAsMap()
+        textRDD.unpersist()
         
+        with open(self.opf, "w+") as f:
+            for k, v in biz_profile.items():
+                f.write(json.dumps({"type": "biz", "biz_id": k, "fvec": v}) + "\n")
+            for k, v in user_profile.items():
+                f.write(json.dumps({"type": "user", "user_id": k, "fvec": v}) + "\n")
+
 
 if __name__ == "__main__":
     t1 = T2()
