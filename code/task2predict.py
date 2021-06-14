@@ -13,7 +13,7 @@ class T2p:
 
     @staticmethod
     def cosine_sim(uservec, bizvec):
-        if not uservec or bizvec:
+        if not uservec or not bizvec:
             return 0
         return len(uservec & bizvec) / (sqrt(len(uservec)) * sqrt(len(bizvec)))
 
@@ -21,13 +21,12 @@ class T2p:
         sc = SparkContext.getOrCreate()
         sc.setLogLevel("OFF")
         
-        reviewRDD = sc.textFile(self.modelfile).map(lambda row: json.loads(row)).map(lambda row: (row["user_id", row["business_id"]]))
         modelRDD = sc.textFile(self.modelfile).map(lambda row: json.loads(row))
 
-        uzp = {x[1] : set(x[2]) for x in modelRDD.filter(lambda row: row["type"] == "user").collect()}
-        bzp = {x[1] : set(x[2]) for x in modelRDD.filter(lambda row: row["type"] == "biz").collect()}
+        uzp = {x["user_id"] : set(x["fvec"]) for x in modelRDD.filter(lambda row: row["type"] == "user").collect()}
+        bzp = {x["biz_id"] : set(x["fvec"]) for x in modelRDD.filter(lambda row: row["type"] == "biz").collect()}
         
-        ans = sc.textFile(self.modelfile).map(lambda row: json.loads(row)).map(lambda row: (row["user_id", row["business_id"]])).map(lambda x, y: (x, y, T2p.cosine_sim(uzp.get(x), bzp.get(y)))).filter(lambda x: x[2] >= 0.01).collect()
+        ans = sc.textFile(self.testfile).map(lambda row: json.loads(row)).map(lambda row: (row["user_id"], row["business_id"])).map(lambda x: (x[0], x[1], T2p.cosine_sim(uzp.get(x[0]), bzp.get(x[1])))).filter(lambda x: x[2] >= 0.01).collect()
         
         with open(self.outputfile, "w+") as f:
             for row in ans:
