@@ -10,7 +10,7 @@ import time
 
 class T3pred:
     def __init__(self) -> None:
-        self.trainfile = sys.argv[1]
+        self.ipf = sys.argv[1]
         self.testfile = sys.argv[1]
         self.modelfile = sys.argv[3]
         self.outfile = sys.argv[4]
@@ -19,6 +19,12 @@ class T3pred:
     def run(self):
         sc = SparkContext.getOrCreate()
         sc.setLogLevel("OFF")
+        
+        trainRDD = sc.textFile(self.ipf).map(lambda review: json.loads(review)).map(lambda review: (review["user_id"], review["business_id"], review["stars"]))
+        testRDD = sc.textFile(self.testfile).map(lambda review: json.loads(review)).map(lambda review: (review["user_id"], review["business_id"]))
+        modelRDD = sc.textFile(self.modelfile).map(lambda mod: json.loads(mod))
+
+        # User-based CF begins here
         
 
 if __name__ == "__main__":
