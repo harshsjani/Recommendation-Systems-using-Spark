@@ -71,28 +71,26 @@ class T3t:
         rbarv = [mean2 + r for r in c2]
         num = sum([rbaru[i] * rbarv[i] for i in range(len(rbaru))])
         bot = sqrt(sum([pow(x, 2) for x in rbaru])) * sqrt(sum([pow(x, 2) for x in rbarv]))
-        return 0 if not num | bot else num / bot
+        return 0 if not num + bot else num / bot
 
     @staticmethod
     def get_actual_pairs(candidates, ubr, biz_map):
         actual_similar_bizz = []
         print("Number of candidate pairs: {}".format(len(candidates)))
-        for b1, b2 in candidates:
-            u1 = biz_map[b1]
-            u2 = biz_map[b2]
-
+        for u1, u2 in candidates:
             rating1 = ubr[u1]
             rating2 = ubr[u2]
             k1set = set(rating1.keys())
             k2set = set(rating2.keys())
 
-            intsc = u1 & u2
-            sim = len(intsc) / len(u1 | u2)
-            if len(k1set & k2set) >= 3 and T3t.getps(rating1, rating2) > 0 and sim >= 0.01:
-                actual_similar_bizz.append((b1, b2, sim))
+            intsc = k1set & k2set
+            sim = len(intsc) / len(k1set | k2set)
+            if len(k1set & k2set) >= 3 and T3t.get_ps(rating1, rating2) > 0 and sim >= 0.01:
+                actual_similar_bizz.append((u1, u2, sim))
         return actual_similar_bizz
 
     def run(self):
+        st = time.time()
         sc = SparkContext.getOrCreate()
         sc.setLogLevel("OFF")
 
@@ -118,6 +116,7 @@ class T3t:
 
         ubRDD = textRDD.map(lambda row: (row["user_id"], [(row["business_id"], row["stars"])])).reduceByKey(lambda x, y: x + y).collect()
         ubr = {row[0] : {x[0] : x[1] for x in row[1]} for row in ubRDD}
+        print("Running time before actual pairs: {}".format(time.time() - st))
         actual_pairs = T3t.get_actual_pairs(candidate_pairs, ubr, biz_map)
         
         with open(self.outmodelfile, "w+") as f:
