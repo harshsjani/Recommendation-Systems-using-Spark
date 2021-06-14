@@ -84,9 +84,11 @@ class T3t:
             k2set = set(rating2.keys())
 
             intsc = k1set & k2set
-            sim = len(intsc) / len(k1set | k2set)
-            if len(k1set & k2set) >= 3 and T3t.get_ps(rating1, rating2) > 0 and sim >= 0.01:
-                actual_similar_bizz.append((u1, u2, sim))
+            if len(intsc) >= 3:
+                sim = len(intsc) / len(k1set | k2set)
+                if sim >= 0.01:
+                    if T3t.get_ps(rating1, rating2) > 0:
+                        actual_similar_bizz.append((u1, u2, sim))
         return actual_similar_bizz
 
     def run(self):
