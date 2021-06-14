@@ -20,8 +20,8 @@ class T3pred:
         sc = SparkContext.getOrCreate()
         sc.setLogLevel("OFF")
         
-        trainRDD = sc.textFile(self.ipf).map(lambda review: json.loads(review)).map(lambda review: (review["user_id"], review["business_id"], review["stars"]))
-        testRDD = sc.textFile(self.testfile).map(lambda review: json.loads(review)).map(lambda review: (review["user_id"], review["business_id"]))
+        trainRDD = sc.textFile(self.ipf).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], review["user_id"], review["stars"]))
+        testRDD = sc.textFile(self.testfile).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], review["user_id"]))
         modelRDD = sc.textFile(self.modelfile).map(lambda mod: json.loads(mod))
 
         # User-based CF begins here
