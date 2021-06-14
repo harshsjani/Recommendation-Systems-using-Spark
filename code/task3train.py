@@ -43,6 +43,72 @@ class T3t:
             sig.append(min(sig_row))
         return sig
 
+    @staticmethod
+    def gen_candidate_pairs(sig_temp, num_bands):
+        candidate_pairs = set()
+        for i in range(num_bands):
+            cur_bucket = defaultdict(set)
+            for row in sig_temp:
+                cur_bucket[row[1][i]].add(row[0])
+            for v in cur_bucket.values():
+                if len(v) == 1:
+                    continue
+                for b1, b2 in combinations(sorted(v), 2):                    
+                    candidate_pairs.add((b1, b2))
+        return candidate_pairs
+
+    @staticmethod
+    def get_ps(rating1, rating2):
+        k1set = set(rating1.keys())
+        k2set = set(rating2.keys())
+        intsc = k1set.intersection(k2set)
+        
+
+    @staticmethod
+    def get_actual_pairs(candidates, ubr, biz_map):
+        actual_similar_bizz = []
+        print("Number of candidate pairs: {}".format(len(candidates)))
+        for b1, b2 in candidates:
+            u1 = biz_map[b1]
+            u2 = biz_map[b2]
+
+            rating1 = ubr[u1]
+            rating2 = ubr[u2]
+            k1set = set(rating1.keys())
+            k2set = set(rating2.keys())
+
+            intsc = u1 & u2
+            sim = len(intsc) / len(u1 | u2)
+            if len(k1set & k2set) >= 3 and T3t.getps(rating1, rating2) > 0 and sim >= 0.01:
+                actual_similar_bizz.append((b1, b2, sim))
+        return actual_similar_bizz
+
+    def run(self):
+        num_bands = 100
+        num_hashes = 100
+        textRDD = self.sc.textFile(self.ipf).map(lambda row: json.loads(row))
+        textRDD.cache()
+
+        bizRDD = textRDD.map(lambda row: row["business_id"]).distinct()
+        cmp_map = bizRDD.zipWithIndex().collectAsMap()
+        num_buckets = len(cmp_map) - 1
+        hash_params = T3t.gen_hash_fns(num_hashes)
+
+        # (user_id, {biz1, biz2, ...})
+        biz_sets = textRDD.map(lambda row: (row['user_id'], cmp_map[row['business_id']])).distinct(
+        ).groupByKey().map(lambda row: (row[0], set(row[1])))
+        biz_sets.cache()
+        biz_map = biz_sets.collectAsMap()
+
+        sig_temp = biz_sets.mapValues(lambda uids_list: T3t.gen_signatures(uids_list, hash_params, num_buckets)).collect()
+        
+        candidate_pairs = T3t.gen_candidate_pairs(sig_temp, num_bands)
+
+        ubRDD = textRDD.map(lambda row: (row["user_id"], [(row["business_id"], row["stars"])])).reduceByKey(lambda x, y: x + y).collect()
+        ubr = {row[0] : {x[1] : x[2] for x in row[1]} for row in ubRDD}
+        actual_pairs = T3t.get_actual_pairs(candidate_pairs, ubr, biz_map)
+        
+
 if __name__ == "__main__":
     t3 = T3t()
 
