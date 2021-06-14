@@ -14,10 +14,6 @@ class T3t:
         self.outmodelfile = sys.argv[2]
         self.cf_type = sys.argv[3]
 
-    def run(self):
-        sc = SparkContext.getOrCreate()
-        sc.setLogLevel("OFF")
-
     @staticmethod
     def gen_hash_fns(num_funcs):
         step = 10 ** 7
@@ -97,9 +93,12 @@ class T3t:
         return actual_similar_bizz
 
     def run(self):
+        sc = SparkContext.getOrCreate()
+        sc.setLogLevel("OFF")
+
         num_bands = 100
         num_hashes = 100
-        textRDD = self.sc.textFile(self.ipf).map(lambda row: json.loads(row))
+        textRDD = sc.textFile(self.trainfile).map(lambda row: json.loads(row))
         textRDD.cache()
 
         bizRDD = textRDD.map(lambda row: row["business_id"]).distinct()
