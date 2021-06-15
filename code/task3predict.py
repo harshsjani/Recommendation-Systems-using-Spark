@@ -55,8 +55,13 @@ class T3pred:
         sc = SparkContext.getOrCreate()
         sc.setLogLevel("OFF")
         
+        # biz: user-rating {biz: ([user, stars], [...], ...)}
         bizuserstar = sc.textFile(self.ipf).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], [(review["user_id"], review["stars"])])).reduceByKey(lambda ur1, ur2: ur1 + ur2).collectAsMap()
+
+        # user-pair: sim {(u1, u2): sim}
         usm = sc.textFile(self.modelfile).map(lambda mod: json.loads(mod)).map(lambda mod: ((mod["u1"], mod["u2"]), mod["sim"])).collectAsMap()
+
+        # {u1, u2, ...}
         unique_uids = T3pred.get_all_userids(usm)
 
         testRDD = sc.textFile(self.testfile).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], review["user_id"])).filter(lambda pair: pair[1] in bizuserstar and pair[0] in unique_uids)
@@ -65,8 +70,7 @@ class T3pred:
         
 
         # User-based CF begins here
-        # user-pair: sim {(u1, u2): sim}
-        # biz: user-rating {biz: (user, stars)}
+
         # [(u1, b1), ...]
 
 

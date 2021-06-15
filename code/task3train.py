@@ -92,7 +92,16 @@ class T3t:
                         actual_similar_bizz.append((u1, u2, ps))
         return actual_similar_bizz
 
-    def run(self):
+    @staticmethod
+    def gen_burmap(burmap):
+        ret = defaultdict(dict)
+
+        for biz_id, value in burmap.items():
+            for u, r in value:
+                ret[biz_id][u] = r
+        return ret
+
+    def run_user_based(self):
         st = time.time()
         sc = SparkContext.getOrCreate()
         sc.setLogLevel("OFF")
@@ -125,7 +134,35 @@ class T3t:
         with open(self.outmodelfile, "w+") as f:
             for useru, userv, sim in actual_pairs:
                 f.write(json.dumps({"u1": useru, "u2": userv, "sim": sim}) + "\n")
+
+    def run_item_based(self):
+        sc = SparkContext.getOrCreate()
+        sc.setLogLevel("OFF")
+
+        ubrRDD = sc.textFile(self.trainfile).map(lambda row: json.loads(row)).map(lambda row: (row["business_id"], (row["user_id"], row["stars"])))
+        burMap = T3t.gen_burmap(ubrRDD.groupByKey().map(lambda row: (row[0], list(row[1]))).filter(lambda row: len(row[1]) >= 3).collectAsMap())
+        unique_biz = burMap.keys()
+
+        similar_bizz = []
+        for biz1, biz2 in combinations(unique_biz, 2):
+            rating1 = burMap[biz1]
+            rating2 = burMap[biz2]
+
+            intsc = set(rating1.keys()).intersection(set(rating2.keys()))
+            if len(intsc) > 2:
+                ps = T3t.get_ps(rating1, rating2)
+                if ps:
+                    similar_bizz.append((biz1, biz2, ps))
         
+        with open(self.outmodelfile, "w+") as f:
+            for biz1, biz2, ps in similar_bizz:
+                f.write(json.dumps({"b1": biz1, "b2": biz2, "sim": ps}) + "\n")
+
+    def run(self):
+        if self.cf_type == "user_based":
+            self.run_user_based()
+        else:
+            self.run_item_based()
 
 if __name__ == "__main__":
     t3 = T3t()
