@@ -65,13 +65,13 @@ class T3t:
         for c in intsc:
             c1.append(rating1[c])
             c2.append(rating2[c])
-        mean1 = -(sum(c1) / len(c))
-        mean2 = -(sum(c2) / len(c))
-        rbaru = [mean1 + r for r in c1]
-        rbarv = [mean2 + r for r in c2]
+        mean1 = (sum(c1) / len(c))
+        mean2 = (sum(c2) / len(c))
+        rbaru = [-mean1 + r for r in c1]
+        rbarv = [-mean2 + r for r in c2]
         num = sum([rbaru[i] * rbarv[i] for i in range(len(rbaru))])
         bot = sqrt(sum([pow(x, 2) for x in rbaru])) * sqrt(sum([pow(x, 2) for x in rbarv]))
-        return 0 if not num + bot else num / bot
+        return 0 if not (num > 0 and bot > 0) else num / bot
 
     @staticmethod
     def get_actual_pairs(candidates, ubr, biz_map):
