@@ -65,8 +65,8 @@ class T3t:
         for c in intsc:
             c1.append(rating1[c])
             c2.append(rating2[c])
-        mean1 = (sum(c1) / len(c))
-        mean2 = (sum(c2) / len(c))
+        mean1 = (sum(c1) / len(intsc))
+        mean2 = (sum(c2) / len(intsc))
         rbaru = [-mean1 + r for r in c1]
         rbarv = [-mean2 + r for r in c2]
         num = sum([rbaru[i] * rbarv[i] for i in range(len(rbaru))])
