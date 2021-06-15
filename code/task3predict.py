@@ -37,21 +37,32 @@ class T3pred:
     @staticmethod
     def get_user_predictions(pair, ratings_list, usm):
         biz_id, user_id = pair
+        neighbor_uids = set(map(lambda rating: rating[0], ratings_list))
+
+        best_N_neighbors = []
+        NEIGHBORS = 5
+        for cand in neighbor_uids:
+            user_pair = tuple(sorted(user_id, cand))
+            if user_pair in usm:
+                best_N_neighbors.append((user_id, cand, usm[user_pair]))
+        best_N_neighbors.sort(reverse=True, key=lambda x: x[2])
+        best_N_neighbors = best_N_neighbors[:NEIGHBORS]
+        avg_biz_rating = sum([ur[1] for ur in ratings_list]) / len(ratings_list)
         
+
 
     def run(self):
         sc = SparkContext.getOrCreate()
         sc.setLogLevel("OFF")
         
-        trainRDD = sc.textFile(self.ipf).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], (review["user_id"], review["stars"]))).groupByKey().collect()
-        bizuserstar = {x[0]: set(x[1]) for x in trainRDD}
+        bizuserstar = sc.textFile(self.ipf).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], [(review["user_id"], review["stars"])])).reduceByKey(lambda ur1, ur2: ur1 + ur2).collectAsMap()
         user_sims = sc.textFile(self.modelfile).map(lambda mod: json.loads(mod)).collect()
         usm = T3pred.get_usersimmap(user_sims)
         unique_uids = T3pred.get_all_userids(usm)
 
         testRDD = sc.textFile(self.testfile).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], review["user_id"])).filter(lambda pair: pair[1] in bizuserstar and pair[0] in unique_uids)
 
-        predicted_ratings = testRDD.map(lambda pair: get_user_predictions(pair, bizuserstar[pair[0]], usm))
+        predicted_ratings = testRDD.map(lambda pair: T3pred.get_user_predictions(pair, bizuserstar[pair[0]], usm))
         
 
         # User-based CF begins here
