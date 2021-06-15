@@ -16,16 +16,49 @@ class T3pred:
         self.outfile = sys.argv[4]
         self.cf_type = sys.argv[5]
 
+    @staticmethod
+    def get_usersimmap(rows):
+        usm = {}
+
+        for row in rows:
+            user1, user2 = list(sorted(row["u1"], row["u2"]))
+            sim = row["sim"]
+            usm[(user1, user2)] = sim
+        return usm
+
+    @staticmethod
+    def get_all_userids(usm):
+        user_ids = set()
+        for uid1, uid2 in usm:
+            set.add(uid1)
+            set.add(uid2)
+        return user_ids
+
+    @staticmethod
+    def get_user_predictions(pair, ratings_list, usm):
+        biz_id, user_id = pair
+        
+
     def run(self):
         sc = SparkContext.getOrCreate()
         sc.setLogLevel("OFF")
         
-        trainRDD = sc.textFile(self.ipf).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], review["user_id"], review["stars"]))
-        testRDD = sc.textFile(self.testfile).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], review["user_id"]))
-        modelRDD = sc.textFile(self.modelfile).map(lambda mod: json.loads(mod))
+        trainRDD = sc.textFile(self.ipf).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], (review["user_id"], review["stars"]))).groupByKey().collect()
+        bizuserstar = {x[0]: set(x[1]) for x in trainRDD}
+        user_sims = sc.textFile(self.modelfile).map(lambda mod: json.loads(mod)).collect()
+        usm = T3pred.get_usersimmap(user_sims)
+        unique_uids = T3pred.get_all_userids(usm)
+
+        testRDD = sc.textFile(self.testfile).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], review["user_id"])).filter(lambda pair: pair[1] in bizuserstar and pair[0] in unique_uids)
+
+        predicted_ratings = testRDD.map(lambda pair: get_user_predictions(pair, bizuserstar[pair[0]], usm))
+        
 
         # User-based CF begins here
-        
+        # user-pair: sim {(u1, u2): sim}
+        # biz: user-rating {biz: (user, stars)}
+        # [(u1, b1), ...]
+
 
 if __name__ == "__main__":
     t3 = T3pred()
