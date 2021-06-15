@@ -21,7 +21,7 @@ class T3pred:
         usm = {}
 
         for row in rows:
-            user1, user2 = list(sorted(row["u1"], row["u2"]))
+            user1, user2 = list(sorted((row["u1"], row["u2"])))
             sim = row["sim"]
             usm[(user1, user2)] = sim
         return usm
@@ -30,8 +30,8 @@ class T3pred:
     def get_all_userids(usm):
         user_ids = set()
         for uid1, uid2 in usm:
-            set.add(uid1)
-            set.add(uid2)
+            user_ids.add(uid1)
+            user_ids.add(uid2)
         return user_ids
 
     @staticmethod
@@ -48,7 +48,7 @@ class T3pred:
         best_N_neighbors.sort(reverse=True, key=lambda x: x[2])
         best_N_neighbors = best_N_neighbors[:NEIGHBORS]
         avg_biz_rating = sum([ur[1] for ur in ratings_list]) / len(ratings_list)
-        
+
 
 
     def run(self):
@@ -56,8 +56,7 @@ class T3pred:
         sc.setLogLevel("OFF")
         
         bizuserstar = sc.textFile(self.ipf).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], [(review["user_id"], review["stars"])])).reduceByKey(lambda ur1, ur2: ur1 + ur2).collectAsMap()
-        user_sims = sc.textFile(self.modelfile).map(lambda mod: json.loads(mod)).collect()
-        usm = T3pred.get_usersimmap(user_sims)
+        usm = sc.textFile(self.modelfile).map(lambda mod: json.loads(mod)).map(lambda mod: ((mod["u1"], mod["u2"]), mod["sim"])).collectAsMap()
         unique_uids = T3pred.get_all_userids(usm)
 
         testRDD = sc.textFile(self.testfile).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], review["user_id"])).filter(lambda pair: pair[1] in bizuserstar and pair[0] in unique_uids)
