@@ -52,6 +52,7 @@ class T3pred:
 
 
     def run(self):
+        return
         sc = SparkContext.getOrCreate()
         sc.setLogLevel("OFF")
         

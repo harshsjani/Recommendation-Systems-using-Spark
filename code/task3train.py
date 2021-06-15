@@ -74,7 +74,7 @@ class T3t:
         return 0 if not (num > 0 and bot > 0) else num / bot
 
     @staticmethod
-    def get_actual_pairs(candidates, ubr, biz_map):
+    def get_actual_pairs(candidates, ubr):
         actual_similar_bizz = []
         print("Number of candidate pairs: {}".format(len(candidates)))
         for u1, u2 in candidates:
@@ -120,7 +120,6 @@ class T3t:
         biz_sets = textRDD.map(lambda row: (row['user_id'], cmp_map[row['business_id']])).distinct(
         ).groupByKey().map(lambda row: (row[0], set(row[1])))
         biz_sets.cache()
-        biz_map = biz_sets.collectAsMap()
 
         sig_temp = biz_sets.mapValues(lambda uids_list: T3t.gen_signatures(uids_list, hash_params, num_buckets)).collect()
         
@@ -129,7 +128,7 @@ class T3t:
         ubRDD = textRDD.map(lambda row: (row["user_id"], [(row["business_id"], row["stars"])])).reduceByKey(lambda x, y: x + y).collect()
         ubr = {row[0] : {x[0] : x[1] for x in row[1]} for row in ubRDD}
         print("Running time before actual pairs: {}".format(time.time() - st))
-        actual_pairs = T3t.get_actual_pairs(candidate_pairs, ubr, biz_map)
+        actual_pairs = T3t.get_actual_pairs(candidate_pairs, ubr)
         
         with open(self.outmodelfile, "w+") as f:
             for useru, userv, sim in actual_pairs:
