@@ -151,7 +151,7 @@ class T3t:
             intsc = set(rating1.keys()).intersection(set(rating2.keys()))
             if len(intsc) > 2:
                 ps = T3t.get_ps(rating1, rating2)
-                if ps:
+                if ps > 0:
                     similar_bizz.append((biz1, biz2, ps))
         
         with open(self.outmodelfile, "w+") as f:
