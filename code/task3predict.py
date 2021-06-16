@@ -63,7 +63,7 @@ class T3pred:
 
     @staticmethod
     def get_user_prediction(uid, bid, ratings_list, modelMap, ur_avg, ubMap):
-        NEIGHBORS = 5
+        NEIGHBORS = 20
         valid_neighbors = []
         
         if bid not in ratings_list:
@@ -71,7 +71,11 @@ class T3pred:
         for uid2, rating in ratings_list[bid]:
             key = tuple(sorted([uid, uid2]))
             if key in modelMap:
-                normal_rating = rating - ur_avg[uid2]
+                if (uid2, bid) in ubMap and ur_avg[uid2][2] > 1:
+                    avg = (ur_avg[uid2][1] - ubMap[(uid2, bid)]) / (ur_avg[uid2][2] - 1)
+                    normal_rating = rating - avg
+                else:
+                    normal_rating = rating - ur_avg[uid2][0]
                 valid_neighbors.append((normal_rating, modelMap[key]))
         
         valid_neighbors.sort(key=lambda x: x[1], reverse=True)
@@ -81,7 +85,7 @@ class T3pred:
         for x in valid_neighbors:
             top += x[0] * x[1]
             bot += abs(x[1])
-        return 0 if (top == 0 or bot == 0) else (ur_avg[uid] + top / bot)
+        return 0 if (top == 0 or bot == 0) else (ur_avg[uid][0] + top / bot)
 
     def run_item_based(self):
         sc = SparkContext.getOrCreate()
@@ -117,7 +121,7 @@ class T3pred:
 
         bur = textRDD.map(lambda row: (row["business_id"], (row["user_id"], row["stars"]))).groupByKey().map(lambda row: (row[0], set(row[1]))).collectAsMap()
         
-        ur_avg = textRDD.map(lambda row: (row["user_id"], row["stars"])).groupByKey().mapValues(lambda row: list(row)).mapValues(lambda row: sum(row) / len(row)).collectAsMap()
+        ur_avg = textRDD.map(lambda row: (row["user_id"], row["stars"])).groupByKey().mapValues(lambda row: list(row)).mapValues(lambda row: (sum(row) / len(row), sum(row), len(row))).collectAsMap()
         ubMap = textRDD.map(lambda row: ((row["user_id"], row["business_id"]), row["stars"])).collectAsMap()
         
         testRDD = sc.textFile(self.testfile).map(lambda row: json.loads(row))
