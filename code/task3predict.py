@@ -11,7 +11,7 @@ import time
 class T3pred:
     def __init__(self) -> None:
         self.ipf = sys.argv[1]
-        self.testfile = sys.argv[1]
+        self.testfile = sys.argv[2]
         self.modelfile = sys.argv[3]
         self.outfile = sys.argv[4]
         self.cf_type = sys.argv[5]
@@ -43,13 +43,16 @@ class T3pred:
 
     @staticmethod
     def get_item_prediction(uid, bid, ratings_list, modelMap):
-        NEIGHBORS = 5
+        NEIGHBORS = 100
         valid_neighbors = []
-        for bizz in ratings_list[uid]:
-            for bid2 in bizz:
-                if tuple(sorted([bid, bid2])) in modelMap:
-                    valid_neighbors.append((ratings_list[uid][bid], modelMap[tuple(sorted([bid, bid2]))]))
-        valid_neighbors.sort(key=lambda x: x[1], reverse=True)[:NEIGHBORS]
+        
+        for bid2, rating in ratings_list[uid]:
+            if tuple(sorted([bid, bid2])) in modelMap:
+                valid_neighbors.append((rating, modelMap[tuple(sorted([bid, bid2]))]))
+        
+        valid_neighbors.sort(key=lambda x: x[1], reverse=True)
+        valid_neighbors = valid_neighbors[:NEIGHBORS]
+
         top = bot = 0
         for x in valid_neighbors:
             top += x[0] * x[1]
@@ -76,12 +79,13 @@ class T3pred:
         sc.setLogLevel("OFF")
 
         # {(b1, b2): sim}
-        modelMap = sc.textFile(self.modelfile).map(lambda row: json.loads(row)).map(lambda row: (tuple(sorted(row["b1"], row["b2"])), row["sim"])).collectAsMap()
+        modelMap = sc.textFile(self.modelfile).map(lambda row: json.loads(row)).map(lambda row: (tuple(sorted([row["b1"], row["b2"]])), row["sim"])).collectAsMap()
         # {u1: {b1: 5, b2: 3}}
-        ubr = T3pred.genubr(sc.textFile(self.ipf).map(lambda row: json.loads(row)).map(lambda row: (row["user_id"], (row["business_id"], row["stars"]))).collectAsMap())
+        ubr = sc.textFile(self.ipf).map(lambda row: json.loads(row)).map(lambda row: (row["user_id"], (row["business_id"], row["stars"]))).groupByKey().map(lambda row: (row[0], set(row[1]))).collectAsMap()
 
-        test_pairs = sc.textFile(self.testfile).map(lambda row: json.loads(row)).map(lambda row: (row["user_id"], row["business_id"])).collect()
-
+        testRDD = sc.textFile(self.testfile).map(lambda row: json.loads(row))
+        test_pairs = testRDD.map(lambda row: (row["user_id"], row["business_id"])).collect()
+        
         with open(self.outfile, "w+") as f:
             for pair in test_pairs:
                 uid = pair[0]
@@ -93,6 +97,7 @@ class T3pred:
 
 
     def run_user_based(self):
+        return
         sc = SparkContext.getOrCreate()
         sc.setLogLevel("OFF")
         
