@@ -43,9 +43,11 @@ class T3pred:
 
     @staticmethod
     def get_item_prediction(uid, bid, ratings_list, modelMap):
-        NEIGHBORS = 100
+        NEIGHBORS = 5
         valid_neighbors = []
         
+        if uid not in ratings_list:
+            return 0
         for bid2, rating in ratings_list[uid]:
             if tuple(sorted([bid, bid2])) in modelMap:
                 valid_neighbors.append((rating, modelMap[tuple(sorted([bid, bid2]))]))
@@ -64,6 +66,8 @@ class T3pred:
         NEIGHBORS = 5
         valid_neighbors = []
         
+        if bid not in ratings_list:
+            return 0
         for uid2, rating in ratings_list[bid]:
             key = tuple(sorted([uid, uid2]))
             if key in modelMap:
@@ -80,7 +84,7 @@ class T3pred:
         for x in valid_neighbors:
             top += x[0] * x[1]
             bot += abs(x[1])
-        return 0 if (top == 0 or bot == 0) else top / bot
+        return 0 if (top == 0 or bot == 0) else (ur_avg[uid] + top / bot)
 
     def run_item_based(self):
         sc = SparkContext.getOrCreate()
@@ -90,8 +94,6 @@ class T3pred:
         modelMap = sc.textFile(self.modelfile).map(lambda row: json.loads(row)).map(lambda row: (tuple(sorted([row["b1"], row["b2"]])), row["sim"])).collectAsMap()
         # {u1: {b1: 5, b2: 3}}
         textRDD = sc.textFile(self.ipf).map(lambda row: json.loads(row))
-        textRDD.cache()
-
         ubr = textRDD.map(lambda row: (row["user_id"], (row["business_id"], row["stars"]))).groupByKey().map(lambda row: (row[0], set(row[1]))).collectAsMap()
 
         testRDD = sc.textFile(self.testfile).map(lambda row: json.loads(row))
@@ -117,15 +119,15 @@ class T3pred:
         textRDD.cache()
 
         bur = textRDD.map(lambda row: (row["business_id"], (row["user_id"], row["stars"]))).groupByKey().map(lambda row: (row[0], set(row[1]))).collectAsMap()
+        
         ur_avg = textRDD.map(lambda row: (row["user_id"], row["stars"])).groupByKey().mapValues(lambda row: list(row)).mapValues(lambda row: sum(row) / len(row)).collectAsMap()
         ubMap = textRDD.map(lambda row: ((row["user_id"], row["business_id"]), row["stars"])).collectAsMap()
+        
         testRDD = sc.textFile(self.testfile).map(lambda row: json.loads(row))
         test_pairs = testRDD.map(lambda row: (row["user_id"], row["business_id"])).collect()
         
         with open(self.outfile, "w+") as f:
-            for pair in test_pairs:
-                uid = pair[0]
-                bid = pair[1]
+            for uid, bid in test_pairs:
                 rating = T3pred.get_user_prediction(uid, bid, bur, modelMap, ur_avg, ubMap)
                 if rating:
                     f.write(json.dumps({"user_id": uid, "business_id": bid, "stars": rating}) + "\n")
