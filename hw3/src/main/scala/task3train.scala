@@ -106,8 +106,11 @@ object task3train {
     var num = 0.0
     var den = 0.0
 
-    for (i <- 0 to v1.size) {
-      num += (v1(i) * v2(i))
+    for (i <- 0 to v1.size - 1) {
+      val mult1 = v1(i)
+      val mult2 = v2(i)
+      val prod = mult1 * mult2
+      num += prod
     }
 
     den = sqrt(v1.map(x => (x * x)).sum) * sqrt(v2.map(x => (x * x)).sum)
@@ -164,7 +167,7 @@ object task3train {
 
     var cands = new HashSet[(String, String)]()
 
-    for (i <- 0 to NUM_BANDS) {
+    for (i <- 0 to NUM_BANDS - 1) {
       var curBucket = new HashMap[Long, HashSet[String]].withDefaultValue(HashSet[String]())
       for (row <- sigTemp) {
         if (curBucket.contains(row._2(i))) {
@@ -212,12 +215,13 @@ object task3train {
         if (sim >= 0.01) {
           val ps = pearsonSim(rating1, rating2)
           if (ps > 0)
-            actualSimBizz += Tuple3(u1, u2, sim)
+            actualSimBizz += Tuple3(u1, u2, ps)
         }
       }
     }
 
     println("Done generating similar pairs")
+    println(actualSimBizz.size)
 
     writeData(actualSimBizz.toArray, outputfile = modelfile)
 

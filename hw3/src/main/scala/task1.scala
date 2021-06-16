@@ -102,7 +102,7 @@ object task1 {
 
     var cands = new HashSet[(String, String)]()
 
-    for (i <- 0 to NUM_BANDS) {
+    for (i <- 0 to NUM_BANDS - 1) {
       var curBucket = new HashMap[Long, HashSet[String]].withDefaultValue(HashSet[String]())
       for (row <- sigTemp) {
         if (curBucket.contains(row._2(i))) {
