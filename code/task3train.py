@@ -106,8 +106,8 @@ class T3t:
         sc = SparkContext.getOrCreate()
         sc.setLogLevel("OFF")
 
-        num_bands = 50
-        num_hashes = 50
+        num_bands = 70
+        num_hashes = 70
         textRDD = sc.textFile(self.trainfile).map(lambda row: json.loads(row))
         textRDD.cache()
 

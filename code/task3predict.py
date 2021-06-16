@@ -63,7 +63,7 @@ class T3pred:
 
     @staticmethod
     def get_user_prediction(uid, bid, ratings_list, modelMap, ur_avg, ubMap):
-        NEIGHBORS = 5
+        NEIGHBORS = 50
         valid_neighbors = []
         
         if bid not in ratings_list:
@@ -72,9 +72,6 @@ class T3pred:
             key = tuple(sorted([uid, uid2]))
             if key in modelMap:
                 normal_rating = rating - ur_avg[uid2]
-                if uid2 in ubMap:
-                    if bid in ubMap[uid2]:
-                        normal_rating -= ubMap[uid2][bid]
                 valid_neighbors.append((normal_rating, modelMap[key]))
         
         valid_neighbors.sort(key=lambda x: x[1], reverse=True)
