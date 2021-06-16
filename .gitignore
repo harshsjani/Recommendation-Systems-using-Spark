@@ -132,3 +132,15 @@ hw3/target/streams/test/managedClasspath/_global/streams/export
 hw3/target/streams/test/unmanagedClasspath/_global/streams/export
 hw3/target/streams/test/unmanagedClasspath/_global/streams/out
 hw3/target/streams/test/unmanagedJars/_global/streams/export
+hw3/target/scala-2.11/classes/task2train.class
+hw3/target/scala-2.11/classes/task2train$.class
+hw3/target/scala-2.11/classes/task2train$$anonfun$1.class
+hw3/target/scala-2.11/classes/task2train$$anonfun$2.class
+hw3/target/scala-2.11/classes/task2train$$anonfun$3.class
+hw3/target/scala-2.11/classes/task2train$$anonfun$4.class
+hw3/target/scala-2.11/classes/task2train$$anonfun$5.class
+hw3/target/scala-2.11/classes/task2train$$anonfun$6.class
+hw3/target/scala-2.11/classes/task2train$$anonfun$7.class
+hw3/target/scala-2.11/classes/task2train$$anonfun$parseReviewList$1.class
+hw3/target/scala-2.11/classes/task2train$$anonfun$parseReviewList$2.class
+hw3/target/scala-2.11/classes/task2train$$anonfun$parseReviewList$3.class
