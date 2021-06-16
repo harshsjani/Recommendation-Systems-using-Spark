@@ -64,6 +64,14 @@ object task3train {
     return (s1, (t1, t2))
   }
 
+  def loadRowItem(row: JValue): (String, (String, Double)) = {
+    val t1 = (row\"user_id").extract[String]
+    val s1 = (row\"business_id").extract[String]
+    val t2 = (row\"stars").extract[Double]
+
+    return (s1, (t1, t2))
+  }
+
   def genUBR(ubRDD: Array[(String, Array[(String, Double)])]): Map[String, HashMap[String, Double]] = {
     val ubr = new HashMap[String, HashMap[String, Double]]
     for (row <- ubRDD) {
@@ -74,6 +82,27 @@ object task3train {
       ubr(row._1) = tempMap
     }
     return ubr.toMap
+  }
+
+  def genBUR(bur: scala.collection.Map[String, Array[(String, Double)]]): Map[String, HashMap[String, Double]] = {
+    val ret = new HashMap[String, HashMap[String, Double]]
+
+    for (item <- bur) {
+      val bid = item._1
+      val urs = item._2
+
+      for (pair <- urs) {
+        val u = pair._1
+        val r = pair._2
+
+        if (!ret.contains(bid)) {
+          ret(bid) = new HashMap[String, Double]
+        }
+        ret(bid)(u) = r
+      }
+    }
+
+    return ret.toMap
   }
 
   def pearsonSim(r1: HashMap[String, Double], r2: HashMap[String, Double]): Double = {
@@ -133,7 +162,57 @@ object task3train {
     out.close()
   }
 
-  def main(args: Array[String]) = {
+  def writeDataItem(simBizz: Array[(String, String, Double)], outputfile: String): Unit = {
+    val out = new PrintWriter(new File(outputfile))
+
+    for (item <- simBizz) {
+      val output: Map[String, Any] = Map("b1"->item._1, "b2"->item._2, "sim"->item._3)
+      val formatted_output = org.json4s.jackson.Serialization.write(output)
+      out.write(formatted_output)
+      out.write("\n")
+    }
+
+    out.close()
+  }
+
+  def itemBased(args: Array[String]) = {
+    val t1 = System.nanoTime
+
+    val sc = SparkContext.getOrCreate()
+    sc.setLogLevel("OFF")
+    val trainfile = args(0)
+    val modelfile = args(1)
+
+    val textRDD = sc.textFile(trainfile)
+      .map(row => parse(row))
+      .map(row => loadRowItem(row))
+      .groupByKey()
+      .mapValues(values => values.toArray)
+      .filter(row => row._2.size >= 3)
+      .collectAsMap()
+
+    val burMap = genBUR(textRDD)
+    val uniqueBiz = burMap.keys
+
+    val similarBizz = new ArrayBuffer[(String, String, Double)]
+    for (item <- uniqueBiz.toArray.combinations(2)) {
+      val rating1 = burMap(item(0))
+      val rating2 = burMap(item(1))
+
+      val intsc = rating1.keys.toSet.intersect(rating2.keys.toSet)
+      if (intsc.size > 2) {
+        val ps = pearsonSim(rating1, rating2)
+        if (ps > 0)
+          similarBizz += ((item(0), item(1), ps))
+      }
+    }
+
+    writeDataItem(similarBizz.toArray, outputfile = modelfile)
+
+    println("Duration: " + (System.nanoTime - t1) / 1e9d)
+  }
+
+  def userBased(args: Array[String]): Unit = {
     val t1 = System.nanoTime
 
     val sc = SparkContext.getOrCreate()
@@ -211,7 +290,7 @@ object task3train {
       val intsc = k1set.intersect(k2set)
 
       if (intsc.size >= 3) {
-        val sim = intsc.size / (k1set.union(k2set)).size
+        val sim = intsc.size.toDouble / (k1set.union(k2set)).size.toDouble
         if (sim >= 0.01) {
           val ps = pearsonSim(rating1, rating2)
           if (ps > 0)
@@ -226,5 +305,14 @@ object task3train {
     writeData(actualSimBizz.toArray, outputfile = modelfile)
 
     println("Duration: " + (System.nanoTime - t1) / 1e9d)
+  }
+
+  def main(args: Array[String]) = {
+    val cfType = args(2)
+
+    if (cfType == "user_based")
+      userBased(args)
+    else
+      itemBased(args)
   }
 }
