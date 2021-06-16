@@ -63,7 +63,7 @@ class T3pred:
 
     @staticmethod
     def get_user_prediction(uid, bid, ratings_list, modelMap, ur_avg, ubMap):
-        NEIGHBORS = 50
+        NEIGHBORS = 5
         valid_neighbors = []
         
         if bid not in ratings_list:
