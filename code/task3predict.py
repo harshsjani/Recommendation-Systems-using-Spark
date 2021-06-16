@@ -60,19 +60,27 @@ class T3pred:
         return 0 if (top == 0 or bot == 0) else top / bot
 
     @staticmethod
-    def get_user_predictions(pair, ratings_list, usm):
-        biz_id, user_id = pair
-        neighbor_uids = set(map(lambda rating: rating[0], ratings_list))
-
-        best_N_neighbors = []
+    def get_user_prediction(uid, bid, ratings_list, modelMap, ur_avg, ubMap):
         NEIGHBORS = 5
-        for cand in neighbor_uids:
-            user_pair = tuple(sorted(user_id, cand))
-            if user_pair in usm:
-                best_N_neighbors.append((user_id, cand, usm[user_pair]))
-        best_N_neighbors.sort(reverse=True, key=lambda x: x[2])
-        best_N_neighbors = best_N_neighbors[:NEIGHBORS]
-        avg_biz_rating = sum([ur[1] for ur in ratings_list]) / len(ratings_list)
+        valid_neighbors = []
+        
+        for uid2, rating in ratings_list[bid]:
+            key = tuple(sorted([uid, uid2]))
+            if key in modelMap:
+                normal_rating = rating - ur_avg[uid2]
+                if uid2 in ubMap:
+                    if bid in ubMap[uid2]:
+                        normal_rating -= ubMap[uid2][bid]
+                valid_neighbors.append((normal_rating, modelMap[key]))
+        
+        valid_neighbors.sort(key=lambda x: x[1], reverse=True)
+        valid_neighbors = valid_neighbors[:NEIGHBORS]
+
+        top = bot = 0
+        for x in valid_neighbors:
+            top += x[0] * x[1]
+            bot += abs(x[1])
+        return 0 if (top == 0 or bot == 0) else top / bot
 
     def run_item_based(self):
         sc = SparkContext.getOrCreate()
@@ -81,7 +89,10 @@ class T3pred:
         # {(b1, b2): sim}
         modelMap = sc.textFile(self.modelfile).map(lambda row: json.loads(row)).map(lambda row: (tuple(sorted([row["b1"], row["b2"]])), row["sim"])).collectAsMap()
         # {u1: {b1: 5, b2: 3}}
-        ubr = sc.textFile(self.ipf).map(lambda row: json.loads(row)).map(lambda row: (row["user_id"], (row["business_id"], row["stars"]))).groupByKey().map(lambda row: (row[0], set(row[1]))).collectAsMap()
+        textRDD = sc.textFile(self.ipf).map(lambda row: json.loads(row))
+        textRDD.cache()
+
+        ubr = textRDD.map(lambda row: (row["user_id"], (row["business_id"], row["stars"]))).groupByKey().map(lambda row: (row[0], set(row[1]))).collectAsMap()
 
         testRDD = sc.textFile(self.testfile).map(lambda row: json.loads(row))
         test_pairs = testRDD.map(lambda row: (row["user_id"], row["business_id"])).collect()
@@ -94,30 +105,30 @@ class T3pred:
                 if rating:
                     f.write(json.dumps({"user_id": uid, "business_id": bid, "stars": rating}) + "\n")
 
-
-
     def run_user_based(self):
-        return
         sc = SparkContext.getOrCreate()
         sc.setLogLevel("OFF")
+
+        # {(u1, u2): sim}
+        modelMap = sc.textFile(self.modelfile).map(lambda row: json.loads(row)).map(lambda row: (tuple(sorted([row["u1"], row["u2"]])), row["sim"])).collectAsMap()
         
-        # biz: user-rating {biz: ([user, stars], [...], ...)}
-        bizuserstar = sc.textFile(self.ipf).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], [(review["user_id"], review["stars"])])).reduceByKey(lambda ur1, ur2: ur1 + ur2).collectAsMap()
+        # {u1: {b1: 5, b2: 3}}
+        textRDD = sc.textFile(self.ipf).map(lambda row: json.loads(row))
+        textRDD.cache()
 
-        # user-pair: sim {(u1, u2): sim}
-        usm = sc.textFile(self.modelfile).map(lambda mod: json.loads(mod)).map(lambda mod: ((mod["u1"], mod["u2"]), mod["sim"])).collectAsMap()
-
-        # {u1, u2, ...}
-        unique_uids = T3pred.get_all_userids(usm)
-
-        testRDD = sc.textFile(self.testfile).map(lambda review: json.loads(review)).map(lambda review: (review["business_id"], review["user_id"])).filter(lambda pair: pair[1] in bizuserstar and pair[0] in unique_uids)
-
-        predicted_ratings = testRDD.map(lambda pair: T3pred.get_user_predictions(pair, bizuserstar[pair[0]], usm))
+        bur = textRDD.map(lambda row: (row["business_id"], (row["user_id"], row["stars"]))).groupByKey().map(lambda row: (row[0], set(row[1]))).collectAsMap()
+        ur_avg = textRDD.map(lambda row: (row["user_id"], row["stars"])).groupByKey().mapValues(lambda row: list(row)).mapValues(lambda row: sum(row) / len(row)).collectAsMap()
+        ubMap = textRDD.map(lambda row: ((row["user_id"], row["business_id"]), row["stars"])).collectAsMap()
+        testRDD = sc.textFile(self.testfile).map(lambda row: json.loads(row))
+        test_pairs = testRDD.map(lambda row: (row["user_id"], row["business_id"])).collect()
         
-
-        # User-based CF begins here
-
-        # [(u1, b1), ...]
+        with open(self.outfile, "w+") as f:
+            for pair in test_pairs:
+                uid = pair[0]
+                bid = pair[1]
+                rating = T3pred.get_user_prediction(uid, bid, bur, modelMap, ur_avg, ubMap)
+                if rating:
+                    f.write(json.dumps({"user_id": uid, "business_id": bid, "stars": rating}) + "\n")
 
     def run(self):
         if self.cf_type == "user_based":
