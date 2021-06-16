@@ -1,6 +1,7 @@
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
@@ -51,7 +52,7 @@ object task2train {
     val ctr = row._2._1.groupBy(identity).mapValues(_.size)
 
     for (x <- ctr) {
-      ret += (x._1, 1)
+      ret += ((x._1, 1))
     }
 
     return ret.toArray.toTraversable
@@ -67,9 +68,9 @@ object task2train {
 
     val tfidfs = new ArrayBuffer[(String, Double)]
 
-    for (word <- wordsList.toSet) {
+    for (word: String <- wordsList.toSet) {
       val tfidf = tf(word) * idfMap(word)
-      tfidfs += (word, tfidf)
+      tfidfs += ((word, tfidf))
     }
 
     tfidfs.sortBy(x => (-x._2, x._1))
@@ -77,24 +78,53 @@ object task2train {
     tfidfs.take(200).map(x => x._1).toArray
   }
 
+  def bizList2WordVec(bizList: Array[String], bizProfile: scala.collection.Map[String, Array[String]]): Array[String] = {
+    var words = new HashSet[String]
+
+    for (biz <- bizList) {
+      words = words.union(bizProfile(biz).toSet)
+    }
+    return words.toArray.take(500)
+  }
+
+  def writeData(opf: String, bizProfile: scala.collection.Map[String, Array[String]], userProfile: scala.collection.Map[String, Array[String]]) = {
+    val out = new PrintWriter(new File(opf))
+
+    for (item <- bizProfile) {
+      val output: Map[String, Any] = Map("type"->"biz", "biz_id"->item._1, "fvec"->item._2)
+      val formatted_output = org.json4s.jackson.Serialization.write(output)
+      out.write(formatted_output)
+      out.write("\n")
+    }
+
+    for (item <- userProfile) {
+      val output: Map[String, Any] = Map("type"->"user", "user_id"->item._1, "fvec"->item._2)
+      val formatted_output = org.json4s.jackson.Serialization.write(output)
+      out.write(formatted_output)
+      out.write("\n")
+    }
+
+    out.close()
+  }
+
   def main(args: Array[String]) = {
     val t1 = System.nanoTime
 
     val sc = SparkContext.getOrCreate()
     sc.setLogLevel("OFF")
+
     val ipf = args(0)
     val opf = args(1)
     val stopwordsfile = args(2)
 
     val stopwords = sc.textFile(stopwordsfile).map(row => row.trim()).collect().toSet
     val textRDD = sc.textFile(ipf).map(row => parse(row))
-    textRDD.cache()
+    textRDD.persist(StorageLevel.DISK_ONLY)
 
     val biztextRDD = textRDD.map(row => ((row\"business_id").extract[String], (row\"text").extract[String]))
       .reduceByKey((x, y) => (x + " " + y))
       .mapValues(row => parseReviewList(row, stopwords))
-
-    biztextRDD.cache()
+    biztextRDD.persist(StorageLevel.DISK_ONLY)
 
     val bizCount = biztextRDD.count()
 
@@ -103,10 +133,24 @@ object task2train {
       .map(kv => (kv._1, log2(bizCount.toDouble / kv._2.toDouble)))
       .collectAsMap()
 
-    val bizProfile = biztextRDD.mapValues(x => getBizProfile(x, idfMap))
-    biztextRDD.unpersist()
+    println("Done creating IDF Map")
 
-    val userProfile = textRDD.map(row => )
+    val bizProfile = biztextRDD.mapValues(x => getBizProfile(x, idfMap)).collectAsMap()
+
+    println("Done creating business profile")
+
+    val userProfile = textRDD.map(row => ((row\"user_id").extract[String], ArrayBuffer[String]((row\"business_id").extract[String])))
+      .reduceByKey((x, y) => x ++= y)
+      .mapValues(value => value.toArray)
+      .mapValues(value => bizList2WordVec(value, bizProfile))
+      .collectAsMap()
+
+    println("Done creating user profile")
+
+
+    writeData(opf, bizProfile, userProfile)
+
+    println("Done writing data")
 
     println("Duration: " + (System.nanoTime - t1) / 1e9d)
   }
