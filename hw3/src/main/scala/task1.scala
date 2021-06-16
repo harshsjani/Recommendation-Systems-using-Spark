@@ -16,25 +16,24 @@ import scala.util.Random
 object task1 {
   implicit val formats = DefaultFormats
 
-  def genHashFns(numFuncs: Int): Array[(Int, Int)] = {
-    val step = 10e7.toInt
-    var curstep = step
-    val start = (10e9 - 10e8 + 17).toInt
-    val bstart = (10e9 - 10e8 + 30697).toInt
-    var fns = new ArrayBuffer[(Int, Int)]
+  def genHashFns(numFuncs: Int): Array[(Long, Long)] = {
+    val start = (10e7 - 5128423).toInt
+    val end = (10e8 + 3267231).toInt
+    val bstart = (10e7 - 3069127).toInt
+    val bend = (10e8 + 1278127).toInt
+    var fns = new ArrayBuffer[(Long, Long)]
     val random = new Random()
 
     for (i <- 0 to numFuncs) {
-      val a = start + random.nextInt(curstep - 10e7.toInt + 23)
-      val b = bstart + random.nextInt((10e9 + curstep + 10e8 - 4123892 - bstart).toInt)
-      curstep += step
+      val a = start + random.nextInt(end - start)
+      val b = bstart + random.nextInt(bend - bstart)
       fns += Tuple2(a, b)
     }
 
     return fns.toArray
   }
 
-  def genSignatures(uidValues: Set[Long], hashParams: Array[(Int, Int)], numBuckets: Int): Array[Long] = {
+  def genSignatures(uidValues: Set[Long], hashParams: Array[(Long, Long)], numBuckets: Int): Array[Long] = {
     val p = (10e9 + 7).toInt
     var sig = new ArrayBuffer[Long]
 
@@ -60,12 +59,15 @@ object task1 {
       val output: Map[String, Any] = Map("b1"->item._1, "b2"->item._2, "sim"->item._3)
       val formatted_output = org.json4s.jackson.Serialization.write(output)
       out.write(formatted_output)
+      out.write("\n")
     }
 
     out.close()
   }
 
   def main(args: Array[String]) = {
+    val t1 = System.nanoTime
+
     val ipf = args(0)
     val opf = args(1)
 
@@ -83,6 +85,8 @@ object task1 {
     val num_buckets = cmp_map.size - 1
     val hash_params = genHashFns(NUM_HASHES)
 
+    println("Done generating hash functions")
+
     val bizSets = textRDD.map(row => ((row \ "business_id").extract[String], cmp_map((row \ "user_id").extract[String])))
       .distinct()
       .groupByKey()
@@ -90,14 +94,23 @@ object task1 {
     bizSets.cache()
     val bizMap = bizSets.collectAsMap()
 
+    println("Done generating bizSets and bizMap")
+
     val sigTemp = bizSets.mapValues(uidsList => genSignatures(uidsList, hash_params, num_buckets)).collect()
+
+    println("Done generating sigTemp")
 
     var cands = new HashSet[(String, String)]()
 
     for (i <- 0 to NUM_BANDS) {
-      var curBucket = new HashMap[Long, HashSet[String]].withDefaultValue(new HashSet[String]())
+      var curBucket = new HashMap[Long, HashSet[String]].withDefaultValue(HashSet[String]())
       for (row <- sigTemp) {
-        curBucket(row._2(i)) += row._1
+        if (curBucket.contains(row._2(i))) {
+          curBucket(row._2(i)) += row._1
+        } else {
+          curBucket(row._2(i)) = new HashSet[String]
+          curBucket(row._2(i)) += row._1
+        }
       }
       for (v <- curBucket.values) {
         if (v.size > 1) {
@@ -107,6 +120,9 @@ object task1 {
         }
       }
     }
+
+    println("Done generating Candidates")
+    println(cands.size)
 
     var actualSimBizz = new ArrayBuffer[(String, String, Double)]
     for (pair <- cands) {
@@ -122,6 +138,11 @@ object task1 {
       }
     }
 
+    println("Done generating similar pairs")
+
     writeData(actualSimBizz.toArray, outputfile = opf)
+
+    println("Done writing data")
+    println("Duration: " + (System.nanoTime - t1) / 1e9d)
   }
 }
