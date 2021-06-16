@@ -35,6 +35,28 @@ class T3pred:
         return user_ids
 
     @staticmethod
+    def genubr(ubrlist):
+        ubr = defaultdict(dict)
+        for k, v in ubrlist.items():
+            ubr[k][v[0]] = v[1]
+        return ubr
+
+    @staticmethod
+    def get_item_prediction(uid, bid, ratings_list, modelMap):
+        NEIGHBORS = 5
+        valid_neighbors = []
+        for bizz in ratings_list[uid]:
+            for bid2 in bizz:
+                if tuple(sorted([bid, bid2])) in modelMap:
+                    valid_neighbors.append((ratings_list[uid][bid], modelMap[tuple(sorted([bid, bid2]))]))
+        valid_neighbors.sort(key=lambda x: x[1], reverse=True)[:NEIGHBORS]
+        top = bot = 0
+        for x in valid_neighbors:
+            top += x[0] * x[1]
+            bot += abs(x[1])
+        return 0 if (top == 0 or bot == 0) else top / bot
+
+    @staticmethod
     def get_user_predictions(pair, ratings_list, usm):
         biz_id, user_id = pair
         neighbor_uids = set(map(lambda rating: rating[0], ratings_list))
@@ -49,10 +71,28 @@ class T3pred:
         best_N_neighbors = best_N_neighbors[:NEIGHBORS]
         avg_biz_rating = sum([ur[1] for ur in ratings_list]) / len(ratings_list)
 
+    def run_item_based(self):
+        sc = SparkContext.getOrCreate()
+        sc.setLogLevel("OFF")
+
+        # {(b1, b2): sim}
+        modelMap = sc.textFile(self.modelfile).map(lambda row: json.loads(row)).map(lambda row: (tuple(sorted(row["b1"], row["b2"])), row["sim"])).collectAsMap()
+        # {u1: {b1: 5, b2: 3}}
+        ubr = T3pred.genubr(sc.textFile(self.ipf).map(lambda row: json.loads(row)).map(lambda row: (row["user_id"], (row["business_id"], row["stars"]))).collectAsMap())
+
+        test_pairs = sc.textFile(self.testfile).map(lambda row: json.loads(row)).map(lambda row: (row["user_id"], row["business_id"])).collect()
+
+        with open(self.outfile, "w+") as f:
+            for pair in test_pairs:
+                uid = pair[0]
+                bid = pair[1]
+                rating = T3pred.get_item_prediction(uid, bid, ubr, modelMap)
+                if rating:
+                    f.write(json.dumps({"user_id": uid, "business_id": bid, "stars": rating}) + "\n")
 
 
-    def run(self):
-        return
+
+    def run_user_based(self):
         sc = SparkContext.getOrCreate()
         sc.setLogLevel("OFF")
         
@@ -73,6 +113,12 @@ class T3pred:
         # User-based CF begins here
 
         # [(u1, b1), ...]
+
+    def run(self):
+        if self.cf_type == "user_based":
+            self.run_user_based()
+        else:
+            self.run_item_based()
 
 
 if __name__ == "__main__":
